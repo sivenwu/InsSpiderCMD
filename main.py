@@ -13,21 +13,43 @@ myCookie = ""
 @click.command()
 @click.option('-n', "--name", type=str, default=None, help="用户昵称id")
 @click.option('-d', "--dir", type=str, default=None, help="保存路径")
-def main(name, dir):
+@click.option('-ns', "--names", type=str, default=None, help="多个用户id")
+def main(name, dir, names):
     nameResult = "petparadise_official"
     dirResult = "."
+    namesResult = []
     if dir is not None:
         dirResult = dir
         pass
     if name is not None:
         nameResult = name
         pass
-    InstaSpider(nameResult, dirResult, myCookie)
+    if names is not None:
+        namesResult = names
+        pass
+
+    namesResult = namesResult.split(",")
+    if (len(namesResult) > 0):
+        print("== 多个用户抓取 ==")
+        # 提前构建文件夹存储
+        now = datetime.datetime.now()
+        dir = "./mult/{today}_{hour}:{min}".format(today=datetime.date.today(), hour=now.hour, min=now.minute)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+        # 开始遍历抓取,单线程执行
+        for i in range(len(namesResult)):
+            readyName = namesResult[i]
+            print("** 开始抓取用户 {} **".format(readyName))
+            InstaSpider(readyName, dirResult, myCookie, dir)
+
+    else:
+        print("== 单个用户抓取 ==")
+        InstaSpider(nameResult, dirResult, myCookie)
 
 
 class InstaSpider(object):
 
-    def __init__(self, user_name, path_name=None, cookie=None):
+    def __init__(self, user_name, path_name=None, cookie=None, dir=None):
         # 初始化要传入ins用户名和保存的文件夹名
         self.path_name = path_name if path_name else user_name
         # 不能多余链接
@@ -45,9 +67,16 @@ class InstaSpider(object):
         self.img_url_list = []
         # 这个uri有可能要根据不同的用户修改
         self.uri = 'https://www.instagram.com/graphql/query/?query_hash=f2405b236d85e8296cf30347c9f08c2a&variables=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A12%2C%22after%22%3A%22{cursor}%22%7D'
-        self.parse_html()
 
-    def parse_html(self):
+        if (dir is None):
+            now = datetime.datetime.now()
+            dir = "./{today}_{hour}:{min}".format(today=datetime.date.today(), hour=now.hour, min=now.minute)
+            if not os.path.exists(dir):
+                os.mkdir(dir)
+        # 开始解析
+        self.parse_html(dir)
+
+    def parse_html(self, dir):
         print('====== 开始爬虫 ======')
         html_str = requests.get(url=self.url, headers=self.headers).text
         url_list = re.findall('''display_url":(.*?)\\u0026''', html_str)
@@ -60,8 +89,10 @@ class InstaSpider(object):
             print(e)
         # 获取有值的cursor
         cursor_list = re.findall('"has_next_page":true,"end_cursor":(.*?)}', html_str, re.S)
+        startCount = 1
         while len(cursor_list) > 0:
             try:
+                print('** 开始第{}次 **'.format(startCount))
                 next_page_url = self.uri.format(user_id=user_id, cursor=cursor_list[0]).replace('"', '')
                 next_html_str = requests.get(next_page_url, headers=self.headers).text
                 # 获取资源地址
@@ -71,20 +102,17 @@ class InstaSpider(object):
                     next_url_list.extend(video_list)
                 self.img_url_list.extend(next_url_list)
                 cursor_list = re.findall('"has_next_page":true,"end_cursor":(.*?)}', next_html_str, re.S)
-                time.sleep(random.random())
+                time.sleep(random.randint(1, 2))
+                startCount = startCount + 1
             except Exception as e:
                 print(e)
                 break
         self.img_url_list = list(set(self.img_url_list))
         print('** 总资源数量: {count} **'.format(count=len(self.img_url_list)))
-        self.display_source()
+        self.display_source(dir)
         print('====== 结束爬虫 ======')
 
-    def display_source(self):
-        now = datetime.datetime.now()
-        dir = "./{today}_{hour}:{min}".format(today=datetime.date.today(), hour=now.hour, min=now.minute)
-        if not os.path.exists(dir):
-            os.mkdir(dir)
+    def display_source(self, dir):
         with open("./{dir}/{name}.csv".format(dir=dir, name=self.userName), "w") as csvFile:
             writer = csv.writer(csvFile)
             writer.writerow(["昵称:"])
@@ -111,7 +139,7 @@ class InstaSpider(object):
             if response.status_code == 200:
                 content = response.content
                 # 判断后缀
-                endw = 'mp4' if r'mp4?_nc_ht=scontent-nrt1-1.cdninstagram.com' in self.img_url_list[i] else 'jpg'
+                endw = 'mp4' if r'mp4?_nc_ht=scontent-nrt1-1.cdninstagram.com' in downUrl else 'jpg'
                 file_path = r'./{path}/{name}.{jpg}'.format(path=self.userName,
                                                             name='%04d' % random.randint(0, 9999),
                                                             jpg=endw)
