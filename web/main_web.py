@@ -17,18 +17,12 @@ userConfigPath = "./userConfig.txt"
 insLoginURL = "https://www.instagram.com/accounts/login/"
 insIndexURL = "https://www.instagram.com/"
 
-# 网络配置
-mCookie = ""
-
-class InstaSpiderPy(object):
+class InsPaserHelper(object):
 
     def __init__(self, user_name, cookie=None):
-        # 初始化要传入ins用户名和保存的文件夹名
-        # 不能多余链接
         s = requests.session()
         s.keep_alive = False  # 关闭多余连接
 
-        # self.url = 'https://www.instagram.com/real__yami/'
         self.userName = user_name
         self.url = 'https://www.instagram.com/{}/'.format(user_name)
         self.headers = {
@@ -71,19 +65,17 @@ class InstaSpiderPy(object):
                 cursor_list = re.findall('"has_next_page":true,"end_cursor":(.*?)}', next_html_str, re.S)
                 time.sleep(random.randint(1, 2))
                 startCount = startCount + 1
-                if(startCount > 3):
-                    break
             except Exception as e:
                 print(e)
                 break
         self.img_url_list = list(set(self.img_url_list))
         print('** 总资源数量: {count} **'.format(count=len(self.img_url_list)))
-        num = 1
+        print('** 开始启动下载程序 **')
         for index in range(len(self.img_url_list)):
             url = self.img_url_list[index]
             self.saveSimple(url)
-            num += 1
-        print('====== 结束爬虫 ======')
+    print('** 全部下载完成 **')
+    print('====== 结束爬虫 ======')
 
     # 简单的下载封装
     def saveSimple(self, downUrl):
@@ -91,7 +83,7 @@ class InstaSpiderPy(object):
         dirpath = './{}'.format(self.userName)
         if not os.path.exists(dirpath):
             os.mkdir(dirpath)
-        print('** 开始下载 ** ')
+        print('**> 开始下载:{}'.format(downUrl))
         try:
             response = requests.get(downUrl, headers=self.headers, timeout=10)
             if response.status_code == 200:
@@ -102,7 +94,6 @@ class InstaSpiderPy(object):
                                                             name='%04d' % random.randint(0, 9999),
                                                             jpg=endw)
                 with open(file_path, 'wb') as f:
-                    print('** 下载完成 ** ')
                     f.write(content)
                     f.close()
             else:
@@ -129,7 +120,7 @@ class InsSpider:
 
     # 随机睡眠 1-5
     def some_sleep(self):
-        time.sleep(random.randint(4, 6))
+        time.sleep(random.randint(1, 2))
 
     def onInitAccountInfo(self):
         print("== 读取登录账号密码 ==")
@@ -185,100 +176,10 @@ class InsSpider:
 
     def onPaser(self):
         for username in self.users:
-            InstaSpiderPy(username,self.cookies)
-            # self.onInsPaserUserInfo(username)
-
-    def onInsPaserUserInfo(self, username):
-        print("== 开始抓取用户{} ==".format(username))
-        self.some_sleep()
-        self.userSourceTag = []
-        self.driverSourceTag = []
-        self.userSource = []
-        self.getUserSourceResult = True
-
-        userUrl = insIndexURL + username + "/"
-        # print("用户主页地址为:" +userUrl)
-        self.webdriver.get(userUrl)  # _mck9w _gvoze _tn0ps
-        self.some_sleep()
-        while (self.getUserSourceResult):
+            userUrl = insIndexURL + username + "/"
+            self.webdriver.get(userUrl)
             self.some_sleep()
-            self.getUserSourceList()
-
-        print('>>>>>>> ', '总目标数为 ', len(self.userSourceTag))
-        self.some_sleep()
-        self.getUserSource(self.userSourceTag)
-        print('>>>>>>> ', '资源获取成功,开始下载...')
-
-        num = 1
-        for index in range(len(self.userSource)):
-            url = self.userSource[index]
-            self.saveSimple(url, str(num), self.username)
-            num += 1
-        print("== 完成抓取用户{} ==".format(username))
-        print("*" * 100)
-
-    # 获取该用户的资源列表
-    def getUserSourceList(self):
-        a_tags = self.webdriver.find_elements_by_class_name("v1Nh3 kIKUG  _bz0w")
-        if (len(a_tags) > len(self.driverSourceTag)):
-            for index in range(len(a_tags)):
-                tagUrl = a_tags[index].find_element_by_tag_name("a")
-                tag = tagUrl.get_attribute('href')
-                if tag not in self.userSourceTag:
-                    self.userSourceTag.append(tag)
-            print('**> 开始下一页')
-            self.driverSourceTag = a_tags
-            self.webdriver.execute_script(
-                "window.scrollTo(0, document.body.scrollHeight)")
-        else:
-            self.getUserSourceResult = False
-            print('**> 没有资源了... ')
-
-    # 通过资源列表获取资源链接
-    def getUserSource(self, tags):
-        for index in range(len(tags)):
-            self.webdriver.get(tags[index])
-            self.some_sleep()
-            videoTag = self.webdriver.find_elements_by_class_name("_l6uaz")
-            imageTag = self.webdriver.find_elements_by_class_name("_9AhH0")
-            if len(videoTag) > 0:
-                source = videoTag[0].get_attribute('src')
-                print('**>', str(index), '获取视频资源', source)
-                self.userSource.append(source)
-            elif len(imageTag) > 0:
-                source = imageTag[0].get_attribute('src')
-                print('**>', str(index), '获取图片资源 ', source)
-                self.userSource.append(source)
-            else:
-                self.getUserSourceResult = False
-                print('**>', '没有资源了... ')
-
-        print('**>', '总资源数: ', len(self.userSource))
-
-    # 简单的下载封装
-    def saveSimple(self, url, file_name, file_path):
-        # print('准备下载 url: '+url ,' fileName: ' + file_name)
-        try:
-            curtime = time.strftime("%Y%m%d", time.localtime())
-            file_path = curtime + "/" + file_path
-            # 创建下载资源的路径
-            if not os.path.exists(file_path):
-                os.makedirs(file_path)
-
-            # 获得视频后缀
-            file_video_suffix = os.path.splitext(url)[1]
-            # 拼接视频名（包含路径）
-            file_video_name = '{}{}{}{}'.format(file_path, os.sep, file_name,
-                                                file_video_suffix)
-            # print("下载内容", file_video_name)
-            # 下载视频，并保存到文件夹中
-            urllib.request.urlretrieve(url, file_video_name)
-            print('**>', file_name, "", file_video_suffix, "】文件下载完毕...")
-
-        except IOError as e:
-            print('**>', '下载错误 :文件操作失败', e)
-        except Exception as e:
-            print('**>', '下载错误 :', e)
-
+            # 代理helper进行解析
+            InsPaserHelper(username,self.cookies)
 
 spider = InsSpider()
